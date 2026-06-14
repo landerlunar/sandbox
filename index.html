@@ -4,6 +4,11 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>GLP-1 Macro Coach</title>
+  <!-- Lets the app be added to an iPhone home screen and run full-screen -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Macro Coach" />
+  <meta name="theme-color" content="#0f1226" />
   <style>
     :root {
       --bg: #0f1226;
@@ -120,6 +125,28 @@
       border: 1px solid var(--line); background: var(--bg); color: var(--text);
     }
     .vit-item .vwhy { color: var(--muted); font-size: 0.82rem; }
+    .vit-pct {
+      flex-shrink: 0; align-self: flex-start; font-size: 0.75rem; font-weight: 700;
+      padding: 3px 9px; border-radius: 999px;
+    }
+    .pct-good { background: rgba(56,211,159,0.18); color: var(--good); }
+    .pct-mid  { background: rgba(255,196,0,0.15); color: #ffd76a; }
+    .pct-low  { background: rgba(255,107,107,0.15); color: #ff9b9b; }
+    .pct-none { background: rgba(164,171,214,0.12); color: var(--muted); }
+    /* Journey tracker */
+    .journey-add { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+    .journey-add input { flex: 1; min-width: 130px; }
+    .journey-add button { margin-top: 0; width: auto; padding: 11px 18px; }
+    .journey-stats { display: flex; gap: 10px; margin-top: 18px; }
+    .jstat { flex: 1; background: var(--card2); border: 1px solid var(--line); border-radius: 12px; padding: 12px; text-align: center; }
+    .jstat .n { font-size: 1.4rem; font-weight: 700; }
+    .jstat .l { color: var(--muted); font-size: 0.72rem; margin-top: 2px; }
+    #jChart svg { width: 100%; height: auto; display: block; margin-top: 16px; }
+    .jrow {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 10px 12px; background: var(--card2); border-radius: 8px; margin-top: 6px; font-size: 0.9rem;
+    }
+    .jrow button { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 1rem; padding: 0 0 0 10px; }
     /* Sources */
     .sources h2 { font-size: 1.05rem; }
     .sources ul { padding-left: 18px; margin: 0; }
@@ -249,6 +276,23 @@
       <div class="tips" id="tips"></div>
 
       <p class="note" id="proteinNote"></p>
+    </div>
+
+    <!-- JOURNEY TRACKER -->
+    <div class="card">
+      <div class="vit-head">
+        <h2 style="margin:0;">Your journey</h2>
+        <span class="vit-progress" id="doseTag">💉 2.5mg microdose</span>
+      </div>
+      <p class="note" style="margin-top:6px;">Log your weight to watch your trend over time. Saved on this device.</p>
+      <div class="journey-add">
+        <input type="date" id="jDate" />
+        <input type="number" id="jWeight" placeholder="weight (lb)" step="0.1" min="50" max="700" />
+        <button class="calc-btn" id="jAdd">Add</button>
+      </div>
+      <div id="jStats" class="journey-stats"></div>
+      <div id="jChart"></div>
+      <div id="jList"></div>
     </div>
 
     <!-- VITAMIN TRACKER -->
@@ -462,6 +506,19 @@
     }
 
     function escapeAttr(s) { return String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;"); }
+    function firstNum(s) {
+      if (s === null || s === undefined) return null;
+      var m = String(s).replace(/,/g, "").match(/-?\d+(\.\d+)?/);
+      return m ? parseFloat(m[0]) : null;
+    }
+    // % is measured against the LOW end of each target (the minimum to "meet" it = 100%).
+    function pctInfo(doseStr, target) {
+      var low = firstNum(target), dose = firstNum(doseStr);
+      if (dose === null || !low) return { text: "—", cls: "pct-none", met: false };
+      var pct = Math.round((dose / low) * 100);
+      var cls = pct >= 100 ? "pct-good" : (pct >= 50 ? "pct-mid" : "pct-low");
+      return { text: pct + "%", cls: cls, met: pct >= 100 };
+    }
 
     function renderVit() {
       var state = loadVit();
@@ -472,6 +529,7 @@
         var saved = state[v.key] || {};
         var on = !!saved.done;
         var doseAttr = saved.dose ? ' value="' + escapeAttr(saved.dose) + '"' : "";
+        var info = pctInfo(saved.dose, v.target);
         html += '<div class="vit-item ' + (on ? "checked" : "") + '" data-key="' + v.key + '">' +
                 '<input type="checkbox" class="vit-check" ' + (on ? "checked" : "") + ' />' +
                 '<div class="vit-main">' +
@@ -479,7 +537,9 @@
                   '<div class="vtarget">Target: ' + v.target + '</div>' +
                   '<input type="text" class="vit-dose" placeholder="logged today (e.g. 85 g)"' + doseAttr + ' />' +
                   '<div class="vwhy">' + v.note + '</div>' +
-                '</div></div>';
+                '</div>' +
+                '<span class="vit-pct ' + info.cls + '">' + info.text + '</span>' +
+                '</div>';
       }
       list.innerHTML = html;
 
@@ -487,14 +547,21 @@
       for (var j = 0; j < rows.length; j++) {
         (function (row) {
           var key = row.getAttribute("data-key");
+          var v = null;
+          for (var n = 0; n < VITAMINS.length; n++) { if (VITAMINS[n].key === key) v = VITAMINS[n]; }
           var chk = row.querySelector(".vit-check");
           var dose = row.querySelector(".vit-dose");
+          var badge = row.querySelector(".vit-pct");
           chk.onchange = function () {
             var s = loadVit(); s[key] = s[key] || {}; s[key].done = chk.checked; saveVit(s);
             row.classList.toggle("checked", chk.checked); updateProgress();
           };
           dose.oninput = function () {
             var s = loadVit(); s[key] = s[key] || {}; s[key].dose = dose.value; saveVit(s);
+            var info = pctInfo(dose.value, v.target);
+            badge.className = "vit-pct " + info.cls;
+            badge.textContent = info.text;
+            updateProgress();
           };
         })(rows[j]);
       }
@@ -506,15 +573,102 @@
     }
 
     function updateProgress() {
-      var state = loadVit(), done = 0;
+      var state = loadVit(), met = 0;
       for (var k = 0; k < VITAMINS.length; k++) {
-        var s = state[VITAMINS[k].key];
-        if (s && s.done) done++;
+        var v = VITAMINS[k], s = state[v.key] || {};
+        var info = pctInfo(s.dose, v.target);
+        if (info.met || s.done) met++;
       }
-      document.getElementById("vitProgress").textContent = "✓ " + done + " of " + VITAMINS.length + " today";
+      document.getElementById("vitProgress").textContent = "🎯 " + met + " of " + VITAMINS.length + " at 100%";
     }
 
     renderVit();
+
+    // ---- Journey: weight over time ----
+    function loadJourney() {
+      try { return JSON.parse(localStorage.getItem("glp1-journey")) || []; } catch (e) { return []; }
+    }
+    function saveJourney(a) {
+      try { localStorage.setItem("glp1-journey", JSON.stringify(a)); } catch (e) {}
+    }
+    function fmtDate(s) {
+      var p = s.split("-");
+      var dt = new Date(parseInt(p[0], 10), parseInt(p[1], 10) - 1, parseInt(p[2], 10));
+      return dt.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+    }
+    function sparkline(data) {
+      var w = 600, h = 150, pad = 22;
+      var weights = data.map(function (d) { return d.weight; });
+      var min = Math.min.apply(null, weights), max = Math.max.apply(null, weights);
+      if (min === max) { min -= 1; max += 1; }
+      var n = data.length;
+      function x(i) { return n === 1 ? w / 2 : pad + (i / (n - 1)) * (w - 2 * pad); }
+      function y(v) { return h - pad - ((v - min) / (max - min)) * (h - 2 * pad); }
+      var pts = data.map(function (d, i) { return x(i) + "," + y(d.weight); }).join(" ");
+      var dots = data.map(function (d, i) {
+        return '<circle cx="' + x(i) + '" cy="' + y(d.weight) + '" r="3.5" fill="#a777e3" />';
+      }).join("");
+      var line = n > 1 ? '<polyline points="' + pts + '" fill="none" stroke="#6e8efb" stroke-width="2.5" stroke-linejoin="round" />' : "";
+      return '<svg viewBox="0 0 ' + w + ' ' + h + '">' + line + dots + '</svg>';
+    }
+
+    function renderJourney() {
+      var data = loadJourney().slice().sort(function (a, b) { return a.date < b.date ? -1 : 1; });
+      var statsEl = document.getElementById("jStats");
+      var chartEl = document.getElementById("jChart");
+      var listEl = document.getElementById("jList");
+
+      if (data.length === 0) {
+        statsEl.innerHTML = "";
+        chartEl.innerHTML = "";
+        listEl.innerHTML = '<p class="note">No entries yet — add your first weigh-in above.</p>';
+        return;
+      }
+
+      var start = data[0].weight, latest = data[data.length - 1].weight;
+      var change = Math.round((latest - start) * 10) / 10;
+      var changeStr = (change > 0 ? "+" : "") + change + " lb";
+      statsEl.innerHTML =
+        '<div class="jstat"><div class="n">' + start + '</div><div class="l">Start (lb)</div></div>' +
+        '<div class="jstat"><div class="n">' + latest + '</div><div class="l">Latest (lb)</div></div>' +
+        '<div class="jstat"><div class="n">' + changeStr + '</div><div class="l">Change</div></div>';
+
+      chartEl.innerHTML = sparkline(data);
+
+      var html = "";
+      for (var i = data.length - 1; i >= 0; i--) {
+        html += '<div class="jrow"><span>' + fmtDate(data[i].date) + '</span>' +
+                '<span>' + data[i].weight + ' lb<button data-date="' + data[i].date + '" title="remove">✕</button></span></div>';
+      }
+      listEl.innerHTML = html;
+
+      var btns = listEl.querySelectorAll("button");
+      for (var j = 0; j < btns.length; j++) {
+        btns[j].onclick = function () {
+          var d = this.getAttribute("data-date");
+          saveJourney(loadJourney().filter(function (e) { return e.date !== d; }));
+          renderJourney();
+        };
+      }
+    }
+
+    document.getElementById("jAdd").onclick = function () {
+      var date = document.getElementById("jDate").value;
+      var weight = parseFloat(document.getElementById("jWeight").value);
+      if (!date || isNaN(weight)) { alert("Please pick a date and enter a weight."); return; }
+      var arr = loadJourney().filter(function (e) { return e.date !== date; }); // one entry per day
+      arr.push({ date: date, weight: Math.round(weight * 10) / 10 });
+      saveJourney(arr);
+      document.getElementById("jWeight").value = "";
+      renderJourney();
+    };
+
+    (function () {
+      var d = new Date();
+      var mm = ("0" + (d.getMonth() + 1)).slice(-2), dd = ("0" + d.getDate()).slice(-2);
+      document.getElementById("jDate").value = d.getFullYear() + "-" + mm + "-" + dd;
+    })();
+    renderJourney();
   </script>
 </body>
 </html>
