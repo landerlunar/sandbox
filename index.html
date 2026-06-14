@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GLP-1 Macro Coach</title>
+  <style>
+    :root {
+      --bg: #0f1226;
+      --card: #1a1f3d;
+      --card2: #232a52;
+      --accent: #6e8efb;
+      --accent2: #a777e3;
+      --good: #38d39f;
+      --text: #eef0fb;
+      --muted: #a4abd6;
+      --line: #2e3766;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, system-ui, "Segoe UI", sans-serif;
+      margin: 0;
+      background: radial-gradient(1200px 600px at 70% -10%, #2a2f63 0%, var(--bg) 55%);
+      color: var(--text);
+      line-height: 1.5;
+      padding: 0 16px 64px;
+    }
+    .wrap { max-width: 760px; margin: 0 auto; }
+    header { text-align: center; padding: 40px 0 8px; }
+    h1 {
+      font-size: 2rem; margin: 0;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+    }
+    .tagline { color: var(--muted); margin: 6px 0 0; font-size: 1.05rem; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 22px;
+      margin-top: 20px;
+    }
+    h2 { font-size: 1.15rem; margin: 0 0 16px; }
+    label { display: block; font-size: 0.85rem; color: var(--muted); margin: 0 0 6px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media (max-width: 520px) { .grid { grid-template-columns: 1fr; } }
+    input, select {
+      width: 100%; padding: 11px 12px; border-radius: 10px;
+      border: 1px solid var(--line); background: var(--card2);
+      color: var(--text); font-size: 1rem;
+    }
+    .units { display: flex; gap: 8px; margin-bottom: 4px; }
+    .unit-btn {
+      flex: 1; padding: 8px; border-radius: 10px; cursor: pointer;
+      border: 1px solid var(--line); background: transparent; color: var(--muted);
+      font-size: 0.85rem;
+    }
+    .unit-btn.active { background: var(--accent); color: white; border-color: var(--accent); }
+    .calc-btn {
+      width: 100%; margin-top: 20px; padding: 15px; border: none; cursor: pointer;
+      border-radius: 12px; font-size: 1.05rem; font-weight: 600; color: white;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+    }
+    .calc-btn:hover { opacity: 0.92; }
+    #results { display: none; }
+    .calorie-hero { text-align: center; padding: 8px 0 4px; }
+    .calorie-hero .num { font-size: 3rem; font-weight: 700; }
+    .calorie-hero .lbl { color: var(--muted); }
+    .macros { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 18px; }
+    .macro {
+      background: var(--card2); border-radius: 12px; padding: 16px; text-align: center;
+      border: 1px solid var(--line);
+    }
+    .macro.protein { border-color: var(--good); }
+    .macro .g { font-size: 1.6rem; font-weight: 700; }
+    .macro .name { color: var(--muted); font-size: 0.85rem; }
+    .macro .pct { color: var(--muted); font-size: 0.75rem; margin-top: 2px; }
+    .badge {
+      display: inline-block; background: rgba(56,211,159,0.15); color: var(--good);
+      font-size: 0.7rem; padding: 2px 8px; border-radius: 999px; margin-top: 6px;
+    }
+    .tips { margin-top: 18px; }
+    .tip-row {
+      display: flex; gap: 10px; padding: 12px; background: var(--card2);
+      border-radius: 10px; margin-top: 8px; font-size: 0.92rem;
+    }
+    .tip-row .ico { flex-shrink: 0; }
+    .note { color: var(--muted); font-size: 0.85rem; margin-top: 14px; }
+    .warn {
+      background: rgba(255,196,0,0.12); border: 1px solid rgba(255,196,0,0.3);
+      color: #ffd76a; border-radius: 10px; padding: 12px; margin-top: 14px; font-size: 0.9rem;
+    }
+    .disclaimer {
+      margin-top: 28px; font-size: 0.8rem; color: var(--muted); text-align: center;
+      border-top: 1px solid var(--line); padding-top: 18px;
+    }
+    .disclaimer strong { color: var(--text); }
+    /* Vitamin tracker */
+    .vit-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+    .vit-progress {
+      font-size: 0.8rem; color: var(--good); background: rgba(56,211,159,0.12);
+      padding: 4px 10px; border-radius: 999px; white-space: nowrap;
+    }
+    .vit-item {
+      display: flex; align-items: flex-start; gap: 12px; padding: 12px;
+      background: var(--card2); border-radius: 10px; margin-top: 8px;
+      cursor: pointer; border: 1px solid var(--line);
+    }
+    .vit-item.checked { border-color: var(--good); background: rgba(56,211,159,0.10); }
+    .vit-check { width: 20px; height: 20px; margin: 2px 0 0; flex-shrink: 0; accent-color: var(--good); cursor: pointer; }
+    .vit-main { display: flex; flex-direction: column; gap: 6px; flex: 1; }
+    .vit-item .vname { font-weight: 600; }
+    .vcat {
+      font-size: 0.62rem; color: var(--muted); border: 1px solid var(--line);
+      padding: 1px 7px; border-radius: 999px; margin-left: 6px; vertical-align: middle;
+    }
+    .vtarget { font-size: 0.8rem; color: var(--accent); }
+    .vit-dose {
+      width: 100%; padding: 7px 10px; font-size: 0.9rem; border-radius: 8px;
+      border: 1px solid var(--line); background: var(--bg); color: var(--text);
+    }
+    .vit-item .vwhy { color: var(--muted); font-size: 0.82rem; }
+    /* Sources */
+    .sources h2 { font-size: 1.05rem; }
+    .sources ul { padding-left: 18px; margin: 0; }
+    .sources li { margin-bottom: 10px; color: var(--muted); font-size: 0.85rem; }
+    .sources a { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>GLP-1 Macro Coach</h1>
+      <p class="tagline">Personalized nutrition targets to protect your muscle &amp; hair on your GLP-1 journey</p>
+    </header>
+
+    <!-- INPUT FORM -->
+    <div class="card">
+      <h2>About you</h2>
+
+      <div class="units">
+        <button type="button" class="unit-btn active" id="imperialBtn">Imperial (lb / ft)</button>
+        <button type="button" class="unit-btn" id="metricBtn">Metric (kg / cm)</button>
+      </div>
+
+      <div class="grid">
+        <div>
+          <label>Sex (for the formula)</label>
+          <select id="sex">
+            <option value="female">Female</option>
+            <option value="male">Male</option>
+          </select>
+        </div>
+        <div>
+          <label>Age</label>
+          <input type="number" id="age" placeholder="e.g. 38" min="14" max="100" />
+        </div>
+
+        <!-- Imperial height -->
+        <div id="impHeight">
+          <label>Height</label>
+          <div style="display:flex; gap:8px;">
+            <input type="number" id="heightFt" placeholder="ft" min="3" max="8" />
+            <input type="number" id="heightIn" placeholder="in" min="0" max="11" />
+          </div>
+        </div>
+        <!-- Metric height -->
+        <div id="metHeight" style="display:none;">
+          <label>Height (cm)</label>
+          <input type="number" id="heightCm" placeholder="e.g. 168" min="120" max="230" />
+        </div>
+
+        <div>
+          <label>Current weight (<span class="wlbl">lb</span>)</label>
+          <input type="number" id="weight" placeholder="e.g. 185" min="60" max="700" />
+        </div>
+
+        <div>
+          <label>Activity level</label>
+          <select id="activity">
+            <option value="1.2">Sedentary (little exercise)</option>
+            <option value="1.375" selected>Light (1–3 days/week)</option>
+            <option value="1.55">Moderate (3–5 days/week)</option>
+            <option value="1.725">Active (6–7 days/week)</option>
+            <option value="1.9">Very active (physical job + training)</option>
+          </select>
+        </div>
+
+        <div>
+          <label>Goal</label>
+          <select id="goal">
+            <option value="0">Maintain weight</option>
+            <option value="250">Gentle loss (~0.5 lb/wk)</option>
+            <option value="500" selected>Steady loss (~1 lb/wk)</option>
+            <option value="750">Faster loss (~1.5 lb/wk)</option>
+          </select>
+        </div>
+      </div>
+
+      <h2 style="margin-top:24px;">Your GLP-1 journey</h2>
+      <div class="grid">
+        <div>
+          <label>Medication</label>
+          <select id="med">
+            <option value="tirzepatide" selected>Tirzepatide (Mounjaro / Zepbound)</option>
+            <option value="semaglutide">Semaglutide (Ozempic / Wegovy)</option>
+            <option value="other">Other GLP-1</option>
+            <option value="none">Not on one yet</option>
+          </select>
+        </div>
+        <div>
+          <label>Weeks since you started</label>
+          <input type="number" id="weeks" placeholder="e.g. 6" min="0" max="200" />
+        </div>
+      </div>
+
+      <button class="calc-btn" id="calcBtn">Calculate my targets</button>
+    </div>
+
+    <!-- RESULTS -->
+    <div class="card" id="results">
+      <h2>Your daily targets</h2>
+      <div class="calorie-hero">
+        <div class="num" id="calOut">—</div>
+        <div class="lbl">calories per day</div>
+      </div>
+
+      <div class="macros">
+        <div class="macro protein">
+          <div class="g" id="proteinOut">—</div>
+          <div class="name">Protein</div>
+          <div class="pct" id="proteinPct"></div>
+          <div class="badge">muscle &amp; hair</div>
+        </div>
+        <div class="macro">
+          <div class="g" id="carbOut">—</div>
+          <div class="name">Carbs</div>
+          <div class="pct" id="carbPct"></div>
+        </div>
+        <div class="macro">
+          <div class="g" id="fatOut">—</div>
+          <div class="name">Fat</div>
+          <div class="pct" id="fatPct"></div>
+        </div>
+      </div>
+
+      <div id="warnBox"></div>
+
+      <div class="tips" id="tips"></div>
+
+      <p class="note" id="proteinNote"></p>
+    </div>
+
+    <!-- VITAMIN TRACKER -->
+    <div class="card">
+      <div class="vit-head">
+        <h2 style="margin:0;">Daily vitamin &amp; supplement tracker</h2>
+        <span class="vit-progress" id="vitProgress"></span>
+      </div>
+      <p class="note" id="vitDate" style="margin-top:6px;"></p>
+      <div id="vitList"></div>
+      <p class="note">
+        Built from your own "Vitamin tracking daily" spreadsheet — your items, targets, and notes.
+        Tick the box once you've taken each one and jot what you actually took in the box. The targets
+        shown are your own goals, not medical advice — confirm what you truly need with bloodwork and your provider.
+        Everything is saved on this device and starts fresh each day.
+      </p>
+    </div>
+
+    <!-- SOURCES -->
+    <div class="card sources">
+      <h2>Why these numbers? (Sources)</h2>
+      <ul>
+        <li><strong>Calorie/energy formula:</strong> Mifflin-St Jeor equation — Mifflin MD et al., "A new predictive equation for resting energy expenditure in healthy individuals," <em>Am J Clin Nutr</em>, 1990.</li>
+        <li><strong>Protein for muscle (~1.6 g/kg):</strong> Morton RW et al., systematic review &amp; meta-analysis of protein supplementation and resistance training, <em>Br J Sports Med</em>, 2018 — <a href="https://pubmed.ncbi.nlm.nih.gov/28698222/" target="_blank" rel="noopener">PubMed</a>.</li>
+        <li><strong>Protein when dieting:</strong> International Society of Sports Nutrition Position Stand: Protein and Exercise (1.4–2.0 g/kg generally; higher to preserve lean mass in a calorie deficit) — <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC5477153/" target="_blank" rel="noopener">PMC</a>.</li>
+        <li><strong>GLP-1 nutrition priorities &amp; micronutrient risk:</strong> American Society for Nutrition, "Nutritional Priorities to Support GLP-1 Therapy for Obesity" — <a href="https://nutrition.org/nutritional-priorities-to-support-glp-1-therapy-for-obesity/" target="_blank" rel="noopener">nutrition.org</a>.</li>
+        <li><strong>Hair loss &amp; nutrient deficiency:</strong> Guo &amp; Katta, "Diet and hair loss: effects of nutrient deficiency and supplement use" (protein, iron, zinc, vitamin D, B12, biotin) — <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC5315033/" target="_blank" rel="noopener">PMC</a>.</li>
+      </ul>
+    </div>
+
+    <div class="disclaimer">
+      <strong>This is not medical advice.</strong> GLP-1 Macro Coach is an educational tool. It does not
+      replace guidance from your doctor, pharmacist, or registered dietitian. Always follow your prescriber's
+      instructions and discuss your nutrition plan with a healthcare professional — especially if you have any
+      medical condition. Your information stays on this device and is never sent anywhere.
+    </div>
+  </div>
+
+  <script>
+    // ---- Unit toggle ----
+    var unit = "imperial";
+    var impBtn = document.getElementById("imperialBtn");
+    var metBtn = document.getElementById("metricBtn");
+
+    function setUnit(u) {
+      unit = u;
+      var imperial = u === "imperial";
+      impBtn.classList.toggle("active", imperial);
+      metBtn.classList.toggle("active", !imperial);
+      document.getElementById("impHeight").style.display = imperial ? "" : "none";
+      document.getElementById("metHeight").style.display = imperial ? "none" : "";
+      document.querySelector(".wlbl").textContent = imperial ? "lb" : "kg";
+    }
+    impBtn.onclick = function () { setUnit("imperial"); };
+    metBtn.onclick = function () { setUnit("metric"); };
+
+    // ---- Helpers ----
+    function num(id) { var v = parseFloat(document.getElementById(id).value); return isNaN(v) ? 0 : v; }
+
+    function getMetricInputs() {
+      var kg, cm;
+      if (unit === "imperial") {
+        kg = num("weight") * 0.453592;
+        cm = (num("heightFt") * 12 + num("heightIn")) * 2.54;
+      } else {
+        kg = num("weight");
+        cm = num("heightCm");
+      }
+      return { kg: kg, cm: cm };
+    }
+
+    // ---- Main calculation ----
+    document.getElementById("calcBtn").onclick = function () {
+      var m = getMetricInputs();
+      var age = num("age");
+      var sex = document.getElementById("sex").value;
+
+      if (m.kg <= 0 || m.cm <= 0 || age <= 0) {
+        alert("Please fill in your age, height, and weight first.");
+        return;
+      }
+
+      // Mifflin-St Jeor BMR (resting calories)
+      var bmr = 10 * m.kg + 6.25 * m.cm - 5 * age + (sex === "male" ? 5 : -161);
+      var activity = parseFloat(document.getElementById("activity").value);
+      var tdee = bmr * activity;                       // maintenance calories
+      var deficit = parseFloat(document.getElementById("goal").value);
+      var target = Math.round(tdee - deficit);
+
+      // Safety floor so we never recommend dangerously low intake
+      var floor = sex === "male" ? 1500 : 1200;
+      var hitFloor = false;
+      if (target < floor) { target = floor; hitFloor = true; }
+
+      // ---- Macros ----
+      // Protein FIRST — high to preserve lean mass & support hair during weight loss
+      var proteinG = Math.round(1.6 * m.kg);
+      var proteinCal = proteinG * 4;
+
+      // Fat ~25% of calories (supports hormones & hair)
+      var fatCal = 0.25 * target;
+      var fatG = Math.round(fatCal / 9);
+
+      // Carbs fill the rest
+      var carbCal = target - proteinCal - fatCal;
+
+      // If protein + fat overshoot, trim protein but keep some carbs
+      var proteinCapped = false;
+      if (carbCal < 0.10 * target) {
+        carbCal = 0.10 * target;
+        proteinCal = target - fatCal - carbCal;
+        proteinG = Math.round(proteinCal / 4);
+        proteinCapped = true;
+      }
+      var carbG = Math.round(carbCal / 4);
+
+      // ---- Render numbers ----
+      document.getElementById("calOut").textContent = target.toLocaleString();
+      document.getElementById("proteinOut").textContent = proteinG + "g";
+      document.getElementById("carbOut").textContent = carbG + "g";
+      document.getElementById("fatOut").textContent = fatG + "g";
+      document.getElementById("proteinPct").textContent = Math.round((proteinG * 4 / target) * 100) + "% of cals";
+      document.getElementById("carbPct").textContent = Math.round((carbG * 4 / target) * 100) + "% of cals";
+      document.getElementById("fatPct").textContent = Math.round((fatG * 9 / target) * 100) + "% of cals";
+
+      var perMeal = Math.round(proteinG / 4);
+      document.getElementById("proteinNote").innerHTML =
+        "That's about <strong>" + perMeal + "g of protein per meal</strong> across 4 eating occasions. " +
+        "If you have a lot of weight to lose, basing protein on your goal weight is also reasonable — " +
+        "your dietitian can help fine-tune this.";
+
+      // ---- Warnings ----
+      var warnBox = document.getElementById("warnBox");
+      warnBox.innerHTML = "";
+      if (hitFloor) {
+        warnBox.innerHTML = '<div class="warn">We raised your target to a safe minimum of ' + floor +
+          ' calories. Eating too little while on a GLP-1 can speed up muscle and hair loss. ' +
+          'Consider a gentler goal and talk to your provider.</div>';
+      } else if (proteinCapped) {
+        warnBox.innerHTML = '<div class="warn">Your calorie target is quite low for this much protein. ' +
+          'We trimmed protein slightly to leave room for carbs — but hitting protein is the priority, ' +
+          'so consider a higher calorie goal if you can.</div>';
+      }
+
+      // ---- Journey-aware tips ----
+      var med = document.getElementById("med").value;
+      var weeks = num("weeks");
+      var medName = { tirzepatide: "tirzepatide", semaglutide: "semaglutide", other: "your GLP-1", none: "a GLP-1" }[med];
+      var tips = [];
+
+      tips.push(["🥩", "<strong>Protein first.</strong> Appetite drops fast on " + medName +
+        " — eat your protein at the start of every meal so you hit your target even when you fill up quickly."]);
+      tips.push(["💧", "<strong>Hydrate.</strong> Aim for plenty of water; GLP-1s can blunt thirst and cause constipation."]);
+      tips.push(["🏋️", "<strong>Resistance training 2–3x/week.</strong> The single best way to keep muscle (and metabolism) while losing weight."]);
+
+      if (med !== "none") {
+        if (weeks <= 4) {
+          tips.push(["📈", "<strong>You're early in your journey (week " + weeks + ").</strong> " +
+            "This is the perfect time to build protein-first habits before appetite suppression gets stronger at higher doses."]);
+        } else if (weeks <= 16) {
+          tips.push(["🍳", "<strong>Appetite is likely strong now (week " + weeks + ").</strong> " +
+            "Don't skip meals — small, protein-dense bites (Greek yogurt, eggs, shakes) help you reach targets without feeling stuffed."]);
+        } else {
+          tips.push(["🔁", "<strong>You're well into your journey (week " + weeks + ").</strong> " +
+            "Keep prioritizing protein and consider a multivitamin to guard against deficiencies that affect hair and energy."]);
+        }
+      }
+      tips.push(["💇", "<strong>Hair protection.</strong> Hair shedding during rapid weight loss is usually from low protein, low calories, or low iron/zinc — hitting these targets is your best defense."]);
+
+      var tipsHtml = "";
+      for (var i = 0; i < tips.length; i++) {
+        tipsHtml += '<div class="tip-row"><span class="ico">' + tips[i][0] + '</span><span>' + tips[i][1] + '</span></div>';
+      }
+      document.getElementById("tips").innerHTML = tipsHtml;
+
+      // Reveal results & scroll to them
+      var results = document.getElementById("results");
+      results.style.display = "block";
+      results.scrollIntoView({ behavior: "smooth", block: "start" });
+    };
+
+    // ---- Daily vitamin & supplement tracker ----
+    // Nutrients most flagged for GLP-1 weight loss + hair/muscle support (see Sources).
+    // Mirrors your "Vitamin tracking daily" spreadsheet — your items, targets & notes.
+    var VITAMINS = [
+      { key: "protein",  cat: "Protein",   name: "Total Protein",     target: "100–115 g",        note: "Hair is protein — your top lever for keeping it." },
+      { key: "water",    cat: "Hydration", name: "Water",             target: "80–100 oz",        note: "Extra important on Zepbound + Adderall." },
+      { key: "vitd",     cat: "Vitamin",   name: "Vitamin D3",        target: "2,000–4,000 IU",   note: "You log ~8,000 IU — keep monitoring labs." },
+      { key: "b12",      cat: "Vitamin",   name: "B12",               target: "25–500 mcg",       note: "Check supplement label." },
+      { key: "folate",   cat: "Vitamin",   name: "Folate",            target: "400–800 mcg DFE",  note: "From your prenatal." },
+      { key: "iron",     cat: "Mineral",   name: "Iron",              target: "18 mg",            note: "Ferritin still matters for hair." },
+      { key: "mag",      cat: "Mineral",   name: "Magnesium",         target: "300–400 mg",       note: "Glycinate helps sleep & constipation." },
+      { key: "zinc",     cat: "Mineral",   name: "Zinc",              target: "10–15 mg",         note: "You flagged this as a potential gap." },
+      { key: "selenium", cat: "Mineral",   name: "Selenium",          target: "55–100 mcg",       note: "You flagged this as a potential gap." },
+      { key: "iodine",   cat: "Mineral",   name: "Iodine",            target: "150 mcg",          note: "From your prenatal." },
+      { key: "choline",  cat: "Nutrient",  name: "Choline",           target: "425–550 mg",       note: "Mostly from food." },
+      { key: "omega3",   cat: "Fat",       name: "Omega-3 EPA/DHA",   target: "500–1,000 mg",     note: "Check fish oil label." },
+      { key: "pumpkin",  cat: "Hair",      name: "Pumpkin Seed Oil",  target: "1,000–2,000 mg",   note: "Hair support — check label." },
+      { key: "saw",      cat: "Hair",      name: "Saw Palmetto",      target: "160–320 mg",       note: "Hair support — check label." }
+    ];
+
+    function todayKey() {
+      var d = new Date();
+      return "glp1-vit-" + d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate();
+    }
+    function loadVit() {
+      try { return JSON.parse(localStorage.getItem(todayKey())) || {}; } catch (e) { return {}; }
+    }
+    function saveVit(state) {
+      try { localStorage.setItem(todayKey(), JSON.stringify(state)); } catch (e) {}
+    }
+
+    function escapeAttr(s) { return String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;"); }
+
+    function renderVit() {
+      var state = loadVit();
+      var list = document.getElementById("vitList");
+      var html = "";
+      for (var i = 0; i < VITAMINS.length; i++) {
+        var v = VITAMINS[i];
+        var saved = state[v.key] || {};
+        var on = !!saved.done;
+        var doseAttr = saved.dose ? ' value="' + escapeAttr(saved.dose) + '"' : "";
+        html += '<div class="vit-item ' + (on ? "checked" : "") + '" data-key="' + v.key + '">' +
+                '<input type="checkbox" class="vit-check" ' + (on ? "checked" : "") + ' />' +
+                '<div class="vit-main">' +
+                  '<div class="vname">' + v.name + '<span class="vcat">' + v.cat + '</span></div>' +
+                  '<div class="vtarget">Target: ' + v.target + '</div>' +
+                  '<input type="text" class="vit-dose" placeholder="logged today (e.g. 85 g)"' + doseAttr + ' />' +
+                  '<div class="vwhy">' + v.note + '</div>' +
+                '</div></div>';
+      }
+      list.innerHTML = html;
+
+      var rows = list.querySelectorAll(".vit-item");
+      for (var j = 0; j < rows.length; j++) {
+        (function (row) {
+          var key = row.getAttribute("data-key");
+          var chk = row.querySelector(".vit-check");
+          var dose = row.querySelector(".vit-dose");
+          chk.onchange = function () {
+            var s = loadVit(); s[key] = s[key] || {}; s[key].done = chk.checked; saveVit(s);
+            row.classList.toggle("checked", chk.checked); updateProgress();
+          };
+          dose.oninput = function () {
+            var s = loadVit(); s[key] = s[key] || {}; s[key].dose = dose.value; saveVit(s);
+          };
+        })(rows[j]);
+      }
+
+      updateProgress();
+      var d = new Date();
+      document.getElementById("vitDate").textContent =
+        "Today — " + d.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
+    }
+
+    function updateProgress() {
+      var state = loadVit(), done = 0;
+      for (var k = 0; k < VITAMINS.length; k++) {
+        var s = state[VITAMINS[k].key];
+        if (s && s.done) done++;
+      }
+      document.getElementById("vitProgress").textContent = "✓ " + done + " of " + VITAMINS.length + " today";
+    }
+
+    renderVit();
+  </script>
+</body>
+</html>
