@@ -9,6 +9,10 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Macro Coach" />
   <meta name="theme-color" content="#0f1226" />
+  <!-- Firebase (cloud sync + Google sign-in) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
   <style>
     :root {
       --bg: #0f1226;
@@ -38,6 +42,10 @@
       -webkit-background-clip: text; background-clip: text; color: transparent;
     }
     .tagline { color: var(--muted); margin: 6px 0 0; font-size: 1.05rem; }
+    .auth-bar { display: flex; justify-content: center; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 14px; font-size: 0.85rem; }
+    .auth-status { color: var(--muted); }
+    .auth-btn { background: var(--card2); border: 1px solid var(--line); color: var(--text); padding: 7px 14px; border-radius: 999px; cursor: pointer; font-size: 0.85rem; }
+    .auth-btn:hover { border-color: var(--accent); }
     .card {
       background: var(--card);
       border: 1px solid var(--line);
@@ -160,6 +168,8 @@
       <h1>GLP-1 Macro Coach</h1>
       <p class="tagline">Personalized nutrition targets to protect your muscle &amp; hair on your GLP-1 journey</p>
     </header>
+
+    <div id="authBar" class="auth-bar"></div>
 
     <!-- INPUT FORM -->
     <div class="card">
@@ -332,6 +342,82 @@
   </div>
 
   <script>
+    // ---- Firebase: cloud sync + Google sign-in ----
+    var firebaseConfig = {
+      apiKey: "AIzaSyDkFXlt2jRMMple7vkt5dlMm2dsdhpzxtk",
+      authDomain: "glp1-macro-coach.firebaseapp.com",
+      projectId: "glp1-macro-coach",
+      storageBucket: "glp1-macro-coach.firebasestorage.app",
+      messagingSenderId: "93751859438",
+      appId: "1:93751859438:web:b3499208bf46d522ee7bff"
+    };
+    var fbReady = false, fbUser = null, db = null, auth = null, suppressPush = false;
+    try {
+      firebase.initializeApp(firebaseConfig);
+      auth = firebase.auth();
+      db = firebase.firestore();
+      fbReady = true;
+    } catch (e) { console.warn("Firebase init failed:", e); }
+
+    function cloudRef() { return (fbReady && fbUser) ? db.collection("users").doc(fbUser.uid) : null; }
+
+    function cloudPush() {
+      var ref = cloudRef();
+      if (!ref || suppressPush) return;
+      ref.set({
+        vit: loadAllVit(),
+        journey: loadJourney(),
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true }).catch(function (e) { console.warn("cloud push failed:", e); });
+    }
+
+    function applyCloud(data) {
+      if (!data) return;
+      suppressPush = true;
+      if (data.vit) localStorage.setItem("glp1-vit", JSON.stringify(data.vit));
+      if (data.journey) localStorage.setItem("glp1-journey", JSON.stringify(data.journey));
+      suppressPush = false;
+      if (typeof renderVit === "function") renderVit();
+      if (typeof renderJourney === "function") renderJourney();
+    }
+
+    function signIn() {
+      if (!fbReady) { alert("Sync isn't ready yet — please refresh."); return; }
+      auth.signInWithPopup(new firebase.auth.GoogleAuthProvider())
+        .catch(function (e) { alert("Sign-in error: " + e.message); });
+    }
+    function signOut() { if (auth) auth.signOut(); }
+
+    function updateAuthUI() {
+      var bar = document.getElementById("authBar");
+      if (!bar) return;
+      if (fbUser) {
+        bar.innerHTML = '<span class="auth-status">☁️ Synced as ' + (fbUser.email || "you") + '</span>' +
+                        '<button class="auth-btn" onclick="signOut()">Sign out</button>';
+      } else {
+        bar.innerHTML = '<span class="auth-status">Not synced</span>' +
+                        '<button class="auth-btn" onclick="signIn()">Sign in with Google to sync</button>';
+      }
+    }
+
+    if (fbReady) {
+      auth.onAuthStateChanged(function (user) {
+        fbUser = user;
+        updateAuthUI();
+        if (!user) return;
+        var ref = cloudRef();
+        ref.get().then(function (snap) {
+          var cloud = snap.exists ? snap.data() : null;
+          var hasCloud = cloud && (cloud.vit || cloud.journey);
+          var hasLocal = localStorage.getItem("glp1-vit") || localStorage.getItem("glp1-journey");
+          if (!hasCloud && hasLocal) cloudPush();      // first sign-in: seed cloud from this device
+          else if (hasCloud) applyCloud(cloud);         // otherwise cloud wins
+          ref.onSnapshot(function (s) { if (s.exists) applyCloud(s.data()); }); // live updates
+        }).catch(function (e) { console.warn("cloud read failed:", e); });
+      });
+    }
+    updateAuthUI(); // show the sign-in button right away
+
     // ---- Unit toggle ----
     var unit = "imperial";
     var impBtn = document.getElementById("imperialBtn");
@@ -494,15 +580,36 @@
       { key: "saw",      cat: "Hair",      name: "Saw Palmetto",      target: "160–320 mg",       note: "Hair support — check label." }
     ];
 
-    function todayKey() {
+    function dateStr() {
       var d = new Date();
-      return "glp1-vit-" + d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate();
+      return d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate();
+    }
+    // One-time migration from the old per-day keys to a single synced object.
+    (function migrateVit() {
+      if (localStorage.getItem("glp1-vit")) return;
+      var all = {};
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (k && k.indexOf("glp1-vit-") === 0) {
+          try { all[k.replace("glp1-vit-", "")] = JSON.parse(localStorage.getItem(k)); } catch (e) {}
+        }
+      }
+      if (Object.keys(all).length) localStorage.setItem("glp1-vit", JSON.stringify(all));
+    })();
+    function loadAllVit() {
+      try { return JSON.parse(localStorage.getItem("glp1-vit")) || {}; } catch (e) { return {}; }
+    }
+    function saveAllVit(obj) {
+      try { localStorage.setItem("glp1-vit", JSON.stringify(obj)); } catch (e) {}
+      cloudPush();
     }
     function loadVit() {
-      try { return JSON.parse(localStorage.getItem(todayKey())) || {}; } catch (e) { return {}; }
+      return loadAllVit()[dateStr()] || {};
     }
     function saveVit(state) {
-      try { localStorage.setItem(todayKey(), JSON.stringify(state)); } catch (e) {}
+      var all = loadAllVit();
+      all[dateStr()] = state;
+      saveAllVit(all);
     }
 
     function escapeAttr(s) { return String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;"); }
@@ -590,6 +697,7 @@
     }
     function saveJourney(a) {
       try { localStorage.setItem("glp1-journey", JSON.stringify(a)); } catch (e) {}
+      cloudPush();
     }
     function fmtDate(s) {
       var p = s.split("-");
