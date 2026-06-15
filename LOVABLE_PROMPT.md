@@ -73,11 +73,6 @@ Therapy for Obesity"; Guo & Katta "Diet and hair loss" review.
 FEATURE 5 — DISCLAIMER
 A clear "This is not medical advice" note: educational only, not a substitute for my doctor,
 pharmacist, or dietitian; confirm what I actually need with bloodwork.
-
-IMPORT
-Let me import my history by uploading a MyFitnessPal nutrition CSV (columns include Date,
-Meal, Calories, Protein (g), Carbohydrates (g), Fat (g)) to seed a daily nutrition history
-(totals per day).
 ```
 
 ---
